@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI야! 내 책을 찾아줘! (수정판)</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+    background: linear-gradient(135deg, #e3f2fd 0%, #fff9c4 100%);
+    margin: 0; padding: 20px; min-height: 100vh;
+  }
+  .container {
+    max-width: 720px; margin: 0 auto; background: #ffffff;
+    border-radius: 24px; padding: 30px; box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+  }
+  .deco-icons { text-align:center; font-size:18px; color:#78909c; margin-bottom:8px; font-weight:bold; }
+  .title-section { text-align: center; margin-bottom: 24px; }
+  .main-title { font-size: 30px; font-weight: 900; color: #2e7d32; margin-bottom: 6px; }
+  .subtitle { font-size: 15px; color: #78909c; margin-bottom: 10px; }
+  .instruction { font-size: 17px; color: #37474f; font-weight: bold; }
+  .word-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+    max-height: 420px; overflow-y: auto; padding: 10px; margin-top: 16px;
+  }
+  .word-btn {
+    padding: 10px 6px; border: none; border-radius: 14px; font-size: 14px; font-weight: bold;
+    background: linear-gradient(135deg, #90caf9 0%, #64b5f6 100%); color: #fff; cursor: pointer;
+    min-height: 78px; transition: transform 0.15s;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  }
+  .word-btn .word-icon { font-size: 28px; line-height: 1; }
+  .word-btn .word-label { line-height: 1.2; }
+  .word-btn:hover { transform: translateY(-2px); }
+  .word-btn:active { transform: scale(0.96); }
+  .hidden { display: none; }
+  .result-view { display: none; }
+  .result-view.active { display: block; }
+  .result-header { text-align: center; margin-bottom: 20px; }
+  .theme-icon { font-size: 64px; margin: 6px 0; }
+  .theme-result { font-size: 28px; font-weight: 900; color: #e65100; margin-bottom: 4px; }
+
+  /* 청구기호 박스: 화면에서 가장 크고 눈에 띄게 (핵심 행동 유도) */
+  .call-number-box {
+    background: linear-gradient(135deg, #fff59d 0%, #ffd54f 100%);
+    border: 4px solid #f9a825; border-radius: 20px; padding: 24px; margin: 20px 0;
+    text-align: center;
+  }
+  .call-number-label { font-size: 18px; font-weight: bold; color: #6d4c00; margin-bottom: 8px; }
+  .call-number-value { font-size: 44px; font-weight: 900; color: #d84315; letter-spacing: 1px; }
+
+  /* 도우미에게 보여달라는 지시문: 짧은 한 줄 + 큰 아이콘 */
+  .action-notice {
+    background: linear-gradient(135deg, #a5d6a7 0%, #66bb6a 100%); color: #fff;
+    border-radius: 18px; padding: 20px; text-align: center; margin: 16px 0;
+    font-size: 19px; font-weight: bold; line-height: 1.6;
+  }
+  .action-notice .big-icon { font-size: 36px; display:block; margin-bottom: 8px; }
+
+  .mic-section { text-align: center; margin: 6px 0 18px; }
+  .mic-btn {
+    padding: 16px 32px; border: none; border-radius: 999px; font-size: 18px; font-weight: bold;
+    background: linear-gradient(135deg, #ef9a9a 0%, #e57373 100%); color: #fff; cursor: pointer;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.12); transition: transform 0.15s;
+  }
+  .mic-btn:active { transform: scale(0.96); }
+  .mic-btn:disabled { background: #cfd8dc; cursor: not-allowed; }
+  .mic-btn.listening { background: linear-gradient(135deg, #ff8a80 0%, #ff5252 100%); animation: pulse 1s infinite; }
+  @keyframes pulse {
+    0% { box-shadow: 0 0 0 0 rgba(255,82,82,0.5); }
+    70% { box-shadow: 0 0 0 14px rgba(255,82,82,0); }
+    100% { box-shadow: 0 0 0 0 rgba(255,82,82,0); }
+  }
+  .mic-status { margin-top: 10px; font-size: 15px; color: #37474f; font-weight: bold; min-height: 20px; }
+  .or-divider { text-align:center; color:#90a4ae; font-size:13px; margin: 4px 0 12px; font-weight:bold; }
+
+  .button-group { display: flex; justify-content: center; gap: 12px; margin-top: 20px; flex-wrap: wrap; }
+  button.btn-replay {
+    background: linear-gradient(135deg, #ba68c8 0%, #9c27b0 100%);
+  }
+  button.btn-reset {
+    padding: 14px 40px; border: none; border-radius: 14px; font-size: 17px; font-weight: bold;
+    cursor: pointer; background: linear-gradient(135deg, #81c784 0%, #4caf50 100%); color: #fff;
+  }
+  @media (max-width: 600px) {
+    .main-title { font-size: 24px; }
+    .word-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="deco-icons">📖 송이야 도서관이랑 놀자 📖</div>
+  <div class="title-section">
+    <div class="main-title">🔍 AI야! 내 책을 찾아줘! (수정판)</div>
+    <div class="subtitle">스킬1. 컴퓨터로 좋아하는 책 찾기 학습용</div>
+    <div class="instruction">👉 마음에 드는 단어를 터치하면 테마와 청구기호를 알려줘요!</div>
+  </div>
+
+  <div id="wordView" class="word-view">
+    <div class="mic-section">
+      <button id="micBtn" class="mic-btn">🎤 말로 골라요!</button>
+      <div class="mic-status" id="micStatus"></div>
+    </div>
+    <div class="or-divider">— 또는 —</div>
+    <div class="word-title" style="text-align:center;font-weight:bold;margin-bottom:10px;">아래 단어 중, 지금 가장 마음에 드는 단어를 톡! 터치해봐요!</div>
+    <div class="word-grid" id="wordGrid"></div>
+  </div>
+
+  <div id="resultView" class="result-view">
+    <div class="result-header">
+      <div class="theme-icon" id="themeEmoji"></div>
+      <div class="theme-result">[<span id="themeText"></span>] 책이에요!</div>
+    </div>
+
+    <!-- 청구기호 박스: 핵심 정보, 가장 크고 눈에 띄게 -->
+    <div class="call-number-box">
+      <div class="call-number-label">📚 청구기호</div>
+      <div class="call-number-value" id="callNumberText"></div>
+    </div>
+
+    <!-- 다음 행동 안내: 자기주도적 서가 이동 유도 -->
+    <div class="action-notice">
+      <span class="big-icon">🚶</span>
+      이 번호를 보고<br>책장으로 가보세요!
+    </div>
+
+    <div class="action-notice" style="background: linear-gradient(135deg, #90caf9 0%, #64b5f6 100%);">
+      <span class="big-icon">🔎</span>
+      숫자가 붙은 칸에서<br>마음에 드는 책을 골라요!
+    </div>
+
+    <div class="action-notice" style="background: linear-gradient(135deg, #ffcc80 0%, #ffa726 100%);">
+      <span class="big-icon">🙋</span>
+      어려우면 선생님께<br>도와달라고 말해도 돼요!
+    </div>
+
+    <div class="button-group">
+      <button class="btn-reset btn-replay" onclick="speakResult()">🔊 다시 듣기</button>
+      <button class="btn-reset" onclick="resetGame()">🔄 다시 하기</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// 50개 단어 - 2개 테마 매핑 데이터 (원본 유지)
+const wordToThemes = {
+  '유튜버': ['직업·진로', '창의·예술'],
+  '숏폼·릴스': ['직업·진로', '미래과학'],
+  '아이돌': ['창의·예술', '직업·진로'],
+  '애니메이션': ['창의·예술', '추리·모험'],
+  '만화책': ['창의·예술', '마음·관계'],
+  '영화': ['창의·예술', '세계역사'],
+
+  '인기 게임': ['미래과학', '창의·예술'],
+  '슬라임': ['요리·과학', '창의·예술'],
+  '탕후루': ['요리·과학', '우리문화'],
+  '종이접기': ['창의·예술', '요리·과학'],
+  '보드게임': ['수학·경제', '추리·모험'],
+  '귀신·괴담': ['추리·모험', '세계역사'],
+  '방탈출': ['추리·모험', '수학·경제'],
+  '캠핑': ['생명과학', '추리·모험'],
+  '레고': ['미래과학', '창의·예술'],
+
+  '반려동물': ['생명과학', '마음·관계'],
+  '공룡': ['생명과학', '세계역사'],
+  '고양이': ['생명과학', '마음·관계'],
+  '곤충': ['생명과학', '요리·과학'],
+  '바다 생물': ['생명과학', '미래과학'],
+  '식물': ['생명과학', '요리·과학'],
+
+  '친구': ['마음·관계', '세계역사'],
+  '급식': ['요리·과학', '직업·진로'],
+  '용돈': ['수학·경제', '직업·진로'],
+  '시험': ['마음·관계', '수학·경제'],
+  '비밀번호': ['미래과학', '추리·모험'],
+  '떡볶이': ['요리·과학', '우리문화'],
+  '일기장': ['마음·관계', '창의·예술'],
+  '스마트폰': ['미래과학', '마음·관계'],
+  '체육시간': ['직업·진로', '마음·관계'],
+
+  '로봇·AI': ['미래과학', '직업·진로'],
+  '우주선': ['미래과학', '추리·모험'],
+  '하늘·비행기': ['미래과학', '창의·예술'],
+  '메타버스': ['미래과학', '직업·진로'],
+  '타임머신': ['세계역사', '추리·모험'],
+  '드론': ['미래과학', '직업·진로'],
+  '화산': ['미래과학', '세계역사'],
+
+  '탐정': ['추리·모험', '직업·진로'],
+  '보물찾기': ['추리·모험', '수학·경제'],
+  '왕과 궁궐': ['우리문화', '세계역사'],
+  '한글': ['우리문화', '창의·예술'],
+  '도자기': ['우리문화', '창의·예술'],
+  '세계 여행': ['세계역사', '추리·모험'],
+  '미라·피라미드': ['세계역사', '추리·모험'],
+  '신화·전설': ['세계역사', '창의·예술'],
+  '조선시대': ['우리문화', '세계역사'],
+
+  '부자': ['수학·경제', '직업·진로'],
+  '마법사': ['창의·예술', '추리·모험'],
+  '초능력': ['미래과학', '추리·모험'],
+  '비밀': ['마음·관계', '추리·모험']
+};
+
+// 신규 추가: 단어별 대표 그림(이모지) - 텍스트만으로 이해가 어려운 학생을 위한 시각적 단서
+const wordToIcon = {
+  '유튜버': '📹', '숏폼·릴스': '🎞️', '아이돌': '🎤', '애니메이션': '📺', '만화책': '💭', '영화': '🎬',
+  '인기 게임': '🎮', '슬라임': '🫧', '탕후루': '🍡', '종이접기': '📄', '보드게임': '🎲', '귀신·괴담': '👻',
+  '방탈출': '🔐', '캠핑': '⛺', '레고': '🧱',
+  '반려동물': '🐶', '공룡': '🦖', '고양이': '🐱', '곤충': '🐛', '바다 생물': '🐠', '식물': '🌱',
+  '친구': '👫', '급식': '🍱', '용돈': '💰', '시험': '📝', '비밀번호': '🔒', '떡볶이': '🍥',
+  '일기장': '📔', '스마트폰': '📱', '체육시간': '⚽',
+  '로봇·AI': '🤖', '우주선': '🚀', '하늘·비행기': '✈️', '메타버스': '🕶️', '타임머신': '⏰', '드론': '🚁', '화산': '🌋',
+  '탐정': '🕵️', '보물찾기': '💎', '왕과 궁궐': '👑', '한글': '🇰🇷', '도자기': '🏺', '세계 여행': '🌍',
+  '미라·피라미드': '🐫', '신화·전설': '🐉', '조선시대': '👘',
+  '부자': '💵', '마법사': '🧙', '초능력': '⚡', '비밀': '🤫'
+};
+
+const themes = {
+  '직업·진로': { emoji:'💼', hint:'🌟 미래의 멋진 나의 모습을 상상해봐!',
+    description:'세상의 수많은 직업과 미래에 내가 무엇을 잘할 수 있을지 안내해 주는 책입니다. 멋진 꿈을 가진 어린이들을 위한 추천 도서예요!' },
+  '창의·예술': { emoji:'🎨', hint:'✨ 내 손으로 만드는 세상, 반짝이는 아이디어!',
+    description:'그림, 음악, 만들기, 종이접기 등 머릿속 상상을 멋지게 표현하는 방법이 가득한 책입니다. 나만의 숨은 예술가 본능을 깨워보세요!' },
+  '미래과학': { emoji:'🚀', hint:'🤖 인공지능부터 우주 탐험까지 과학 마스터!',
+    description:'로봇, AI, 컴퓨터, 우주의 비밀 등 흥미진진한 미래 과학 이야기가 펼쳐집니다. 똑똑한 과학 박사가 되고 싶은 친구들에게 딱 맞아요!' },
+  '요리·과학': { emoji:'🍳', hint:'🔬 일상 속 숨어있는 신기한 과학 실험실!',
+    description:'달콤한 음식의 비밀, 슬라임의 원리 등 우리 주변 사물 속에 숨겨진 놀라운 과학을 재미있는 실험처럼 알려주는 책입니다.' },
+  '마음·관계': { emoji:'💗', hint:'🤝 친구의 마음, 나의 마음을 이해하는 열쇠!',
+    description:'친구와 사이좋게 지내는 법, 고민이 있을 때 마음을 위로받는 법을 알려주는 따뜻한 책입니다. 마음의 키가 한 뼘 더 자랄 거예요!' },
+  '우리문화': { emoji:'🏯', hint:'🇰🇷 자랑스러운 대한민국의 보물 같은 이야기!',
+    description:'맛있는 우리 음식의 역사부터 한글의 우수성, 선조들의 지혜가 담긴 전통 예술까지 우리나라의 소중한 이야기들을 재미있게 배울 수 있습니다.' },
+  '추리·모험': { emoji:'🕵️', hint:'💓 심장이 쫄깃! 수수께끼를 해결해라!',
+    description:'비밀번호를 풀고 탐정이 되어 사건을 해결하거나, 미지의 세계로 흥미진진한 모험을 떠나는 이야기를 다룬 손에 땀을 쥐게 하는 책입니다.' },
+  '세계역사': { emoji:'⏳', hint:'🌍 타임머신을 타고 떠나는 지구촌 옛날이야기!',
+    description:'먼 옛날 전 세계 사람들은 어떻게 살았을까요? 다른 나라의 신기한 역사와 미스터리한 괴담 등 시간 여행을 떠나게 만들어주는 책입니다.' },
+  '수학·경제': { emoji:'💰', hint:'📊 용돈 관리부터 똑똑한 부자 되는 비법!',
+    description:'돈은 어떻게 움직일까요? 생활 속 수학 퀴즈와 함께 돈을 바르게 쓰고 모으는 경제 습관을 길러주는 아주 유용한 도서입니다.' },
+  '생명과학': { emoji:'🐾', hint:'🌱 지구에서 함께 살아가는 귀여운 생명체들!',
+    description:'강아지, 고양이 같은 반려동물부터 숲속의 곤충과 동물 친구들의 놀라운 생태를 다룬 책입니다. 생명을 사랑하는 마음을 키워줘요!' }
+};
+
+// 신규 추가: 테마 → 청구기호 매핑 (A안 핵심)
+const themeToCallNumber = {
+  '마음·관계': '180번대',
+  '수학·경제': '320번대',
+  '직업·진로': '325번대',
+  '우리문화': '380번대',
+  '생명과학': '480번대',
+  '미래과학': '550번대',
+  '요리·과학': '590번대',
+  '창의·예술': '650번대',
+  '추리·모험': '813번대',
+  '세계역사': '900번대'
+};
+
+// 신규 추가: 아이콘이 단어를 얼마나 명확하게 표현하는지 기준으로 정렬한 노출 순서
+// (확실한 그림 → 보통 → 애매한 그림 순으로 배치하여, 그림만 보고도 고르기 쉬운 단어가 먼저 보이도록 함)
+const wordDisplayOrder = [
+  // 확실함: 그림만 보고 바로 알 수 있는 단어
+  '공룡', '고양이', '우주선', '로봇·AI', '하늘·비행기', '캠핑', '레고', '곤충', '바다 생물', '식물',
+  '화산', '왕과 궁궐', '마법사', '스마트폰', '인기 게임', '급식', '친구', '반려동물', '귀신·괴담', '신화·전설',
+  '보드게임', '비밀', '영화', '아이돌', '용돈', '보물찾기', '비밀번호', '시험', '일기장', '세계 여행',
+  '유튜버', '체육시간', '탐정', '도자기',
+  // 보통: 대체로 알아볼 수 있으나 약간의 설명이 도움이 되는 단어
+  '방탈출', '부자', '드론', '초능력', '애니메이션', '떡볶이', '탕후루', '한글', '타임머신',
+  // 애매함: 그림만으로는 뜻을 유추하기 어려운 단어 (교사의 언어적 설명 병행 권장)
+  '미라·피라미드', '조선시대', '메타버스', '만화책', '슬라임', '숏폼·릴스', '종이접기'
+];
+
+let selectedWord = null;
+let selectedTheme = null;
+
+function initGame() {
+  const grid = document.getElementById('wordGrid');
+  grid.innerHTML = '';
+  const words = wordDisplayOrder;
+  words.forEach(word => {
+    const btn = document.createElement('button');
+    btn.className = 'word-btn';
+    const icon = wordToIcon[word] || '⭐';
+    btn.innerHTML = `<span class="word-icon" aria-hidden="true">${icon}</span><span class="word-label">${word}</span>`;
+    btn.onclick = () => selectWord(word);
+    grid.appendChild(btn);
+  });
+}
+
+// 수정: 랜덤 제거 → 항상 첫 번째 테마로 고정 매칭 (재현성 확보)
+function selectWord(word) {
+  selectedWord = word;
+
+  const availableThemes = wordToThemes[word];
+  selectedTheme = availableThemes[0]; // 고정 매칭 (랜덤 삭제됨)
+
+  document.getElementById('wordView').classList.add('hidden');
+  document.getElementById('resultView').classList.add('active');
+
+  document.getElementById('themeText').textContent = selectedTheme;
+
+  const themeData = themes[selectedTheme];
+  document.getElementById('themeEmoji').textContent = themeData.emoji;
+
+  // 청구기호 표시
+  document.getElementById('callNumberText').textContent = themeToCallNumber[selectedTheme];
+
+  speakResult();
+}
+
+// ===== 결과 읽어주기(음성 합성) =====
+function speakResult() {
+  if (!('speechSynthesis' in window)) return;
+  if (!selectedTheme) return;
+
+  window.speechSynthesis.cancel(); // 이전에 읽던 것이 있으면 중단하고 새로 시작
+
+  const themeData = themes[selectedTheme];
+  const callNumber = themeToCallNumber[selectedTheme];
+  const message =
+    `${selectedTheme} 책이에요! ${themeData.description} ` +
+    `청구기호는 ${callNumber} 입니다. 이 번호를 보고 책장으로 가서, ` +
+    `숫자가 붙은 칸에서 마음에 드는 책을 골라보세요!`;
+
+  const utterance = new SpeechSynthesisUtterance(message);
+  utterance.lang = 'ko-KR';
+  utterance.rate = 0.95;
+  utterance.pitch = 1.05;
+  window.speechSynthesis.speak(utterance);
+}
+
+function resetGame() {
+  if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+  selectedWord = null;
+  selectedTheme = null;
+  document.getElementById('wordView').classList.remove('hidden');
+  document.getElementById('resultView').classList.remove('active');
+  const micStatus = document.getElementById('micStatus');
+  if (micStatus) micStatus.textContent = '';
+  initGame();
+}
+
+// ===== 음성인식(마이크) 기능 =====
+let recognition = null;
+let isListening = false;
+
+// 말한 단어를 목록 단어와 매칭 (공백 무시, 정확일치 → 부분일치 순서로 시도)
+function findMatchingWord(transcript) {
+  const clean = transcript.replace(/\s+/g, '');
+  const words = Object.keys(wordToThemes).sort((a, b) => b.length - a.length);
+
+  for (const w of words) {
+    if (clean === w.replace(/\s+/g, '')) return w;
+  }
+  for (const w of words) {
+    const wClean = w.replace(/\s+/g, '');
+    if (clean.includes(wClean) || wClean.includes(clean)) return w;
+  }
+  return null;
+}
+
+function setupSpeechRecognition() {
+  const micBtn = document.getElementById('micBtn');
+  const micStatus = document.getElementById('micStatus');
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  if (!SpeechRecognition) {
+    micBtn.disabled = true;
+    micBtn.textContent = '🎤 이 브라우저는 음성인식이 안 돼요';
+    micStatus.textContent = '크롬(Chrome) 브라우저에서 다시 열어보거나, 단어를 터치해주세요!';
+    return;
+  }
+
+  recognition = new SpeechRecognition();
+  recognition.lang = 'ko-KR';
+  recognition.continuous = false;
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 5;
+
+  recognition.onstart = () => {
+    isListening = true;
+    micBtn.textContent = '🔴 듣고 있어요...';
+    micBtn.classList.add('listening');
+    micStatus.textContent = '지금 좋아하는 단어를 말해보세요!';
+  };
+
+  recognition.onresult = (event) => {
+    const results = event.results[0];
+    let matchedWord = null;
+    let heardText = '';
+
+    for (let i = 0; i < results.length; i++) {
+      const transcript = results[i].transcript.trim();
+      if (i === 0) heardText = transcript;
+      const match = findMatchingWord(transcript);
+      if (match) { matchedWord = match; heardText = transcript; break; }
+    }
+
+    if (matchedWord) {
+      micStatus.textContent = `"${heardText}"(이)라고 들었어요! 🎉`;
+      setTimeout(() => selectWord(matchedWord), 600);
+    } else {
+      micStatus.textContent = `"${heardText}"(이)라고 들린 것 같아요. 목록에 있는 단어로 다시 말해볼까요?`;
+    }
+  };
+
+  recognition.onerror = (event) => {
+    if (event.error === 'not-allowed' || event.error === 'permission-denied' || event.error === 'service-not-allowed') {
+      micStatus.textContent = '마이크 사용을 허락해주세요! 🎙️';
+    } else if (event.error === 'no-speech') {
+      micStatus.textContent = '아무 소리도 못 들었어요. 마이크 버튼을 다시 눌러 말해보세요!';
+    } else {
+      micStatus.textContent = '앗, 잘 안 들렸어요. 다시 눌러서 시도해봐요!';
+    }
+  };
+
+  recognition.onend = () => {
+    isListening = false;
+    micBtn.textContent = '🎤 말로 골라요!';
+    micBtn.classList.remove('listening');
+  };
+
+  micBtn.addEventListener('click', () => {
+    if (isListening) {
+      recognition.stop();
+      return;
+    }
+    try {
+      recognition.start();
+    } catch (e) {
+      micStatus.textContent = '마이크를 시작할 수 없어요. 다시 눌러보세요!';
+    }
+  });
+}
+
+initGame();
+setupSpeechRecognition();
+</script>
+</body>
+</html>
